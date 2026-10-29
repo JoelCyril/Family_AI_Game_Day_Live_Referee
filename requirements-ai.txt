@@ -1,0 +1,3 @@
+-r requirements.txt
+mediapipe>=0.10.21
+ultralytics>=8.3

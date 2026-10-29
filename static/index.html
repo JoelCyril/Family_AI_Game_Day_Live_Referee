@@ -1,0 +1,965 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Family AI Game Day — AI Referee (Advanced Track)</title>
+<style>
+:root{--bg:#0b1220;--panel:#151f32;--card:#101a2c;--line:#2c3c53;--text:#f2f7ff;--muted:#96a7bd;--lime:#38ef7d;--blue:#38bdf8;--red:#f87171;--gold:#fbbf24}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.48 system-ui,-apple-system,Segoe UI,sans-serif}h1,h2,h3,p{margin:0}button,input,select{font:inherit}
+button{cursor:pointer;border-radius:8px;border:1px solid var(--line);background:#223348;color:white;padding:9px 12px;font-weight:650;transition:all .15s}
+button:hover{filter:brightness(1.15);border-color:#486386}
+button.primary{background:var(--lime);border-color:var(--lime);color:#082411;font-weight:750}
+button.blue{background:var(--blue);border-color:var(--blue);color:#082136;font-weight:750}
+button.danger{background:#59293c;border-color:#843452}
+button.accent{background:#2a4365;border-color:#3182ce;color:#bee3f8}
+button:disabled{opacity:.4;cursor:not-allowed}
+input,select{background:#0e192b;border:1px solid #39506c;color:var(--text);padding:8px 10px;border-radius:7px;min-width:0;width:100%}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
+header{display:flex;align-items:center;justify-content:space-between;padding:16px max(20px,calc((100vw - 1480px)/2));border-bottom:1px solid var(--line);background:#111b2a}
+.brand{font-size:22px;font-weight:850;letter-spacing:.3px}.brand em{color:var(--lime);font-style:normal}
+.track-badge{background:#1e3a5f;color:var(--blue);padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;margin-left:8px;vertical-align:middle}
+.subtitle{color:var(--muted);font-size:12px;margin-top:2px}
+.status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}
+.dot{height:9px;width:9px;display:inline-block;background:var(--red);border-radius:50%}.dot.on{background:var(--lime)}
+main{max-width:1480px;margin:auto;padding:18px;display:grid;grid-template-columns:300px minmax(440px,1fr) 330px;gap:16px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+.panel h2{font-size:14px;letter-spacing:.3px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.sidebar{display:flex;flex-direction:column;gap:16px}
+.choice{display:flex;gap:10px;align-items:center;border:1px solid transparent;background:var(--card);border-radius:8px;padding:9px;cursor:pointer;margin:5px 0}
+.choice.active{border-color:var(--lime);background:#162b22}
+.choice .symbol{width:32px;height:32px;display:grid;place-items:center;background:#203146;border-radius:7px;font-size:17px}
+.choice strong{display:block;font-size:13px}
+.choice small{color:var(--muted);font-size:11px}
+.space{height:8px}
+.formline{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.camera{position:relative;border-radius:12px;overflow:hidden;background:#050a12;aspect-ratio:16/9;border:1px solid #23344a}
+.camera video{width:100%;height:100%;object-fit:contain;display:block}
+.camera canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+.camera .empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#bbcbd9;background:radial-gradient(circle,#162638,#050a14);pointer-events:none}
+.camera .empty.hidden{display:none}
+.toolbar{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+.toolbar button{flex:1;min-width:90px}
+.source-tabs{display:flex;gap:6px;margin-bottom:10px;background:#0e1726;padding:4px;border-radius:9px;border:1px solid var(--line)}
+.source-tab{flex:1;background:transparent;border:0;color:var(--muted);padding:7px;font-size:12px;border-radius:6px}
+.source-tab.active{background:#22364e;color:white;font-weight:700}
+.hints{color:#cad8e7;padding:10px 0 6px;font-size:12.5px;line-height:1.5}
+.legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:11.5px}
+.legend b{color:var(--lime)}
+.statrow{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.stat{background:#0e1726;border-radius:10px;padding:10px;text-align:center;border:1px solid #213349}
+.stat span{color:var(--muted);font-size:11px;font-weight:600}
+.stat strong{display:block;font-size:32px;line-height:1.15}
+.scoreA{color:var(--red)}.scoreB{color:var(--blue)}
+.possession-container{margin:10px 0 6px;background:#0d1828;border-radius:9px;padding:10px;border:1px solid #1f334a}
+.possession-bar{display:flex;height:14px;border-radius:6px;overflow:hidden;background:#18283c;margin:6px 0 4px}
+.pos-a{background:var(--red);transition:width .3s}
+.pos-b{background:var(--blue);transition:width .3s}
+.pos-labels{display:flex;justify-content:space-between;font-size:11px;font-weight:700}
+.mvp-box{background:linear-gradient(135deg,#232014,#1a271d);border:1px solid #635227;border-radius:10px;padding:10px;display:flex;align-items:center;gap:12px;margin:8px 0}
+.mvp-icon{font-size:28px}
+.mvp-text strong{color:var(--gold);font-size:14px;display:block}
+.mvp-text small{color:var(--muted);font-size:11px}
+.players-table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}
+.players-table th{text-align:left;color:var(--muted);padding:4px;border-bottom:1px solid var(--line);font-size:11px}
+.players-table td{padding:5px 4px;border-bottom:1px solid #1a283c}
+.players-table tr.has-ball{background:#162b20;font-weight:bold;color:var(--lime)}
+.metric{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #23344a;font-size:12px}
+.metric:last-child{border-bottom:0}.metric span{color:var(--muted)}.metric strong{text-align:right}
+.events{max-height:280px;overflow:auto}
+.event{padding:9px 0;border-bottom:1px solid #203146}
+.event small{color:var(--muted);font-size:11px}
+.event p{font-size:12.5px;margin-top:2px}
+.review{display:inline-block;background:#443322;color:#ffd089;border-radius:4px;padding:1px 5px;margin-top:3px;font-size:10px}
+.good{color:var(--lime)}.error{color:#f87171}
+.pill{display:inline-block;background:#173426;color:var(--lime);padding:3px 7px;border-radius:100px;font-size:10.5px;font-weight:700}
+.rightstack{display:flex;flex-direction:column;gap:16px}
+.tiny{font-size:11px;color:var(--muted)}
+.diagnostics{word-break:break-word;color:#b6cbe0;font-size:11.5px;max-height:120px;overflow:auto;white-space:pre-wrap;background:#0c1524;padding:8px;border-radius:7px;border:1px solid #1f3148}
+.inline{display:flex;gap:8px;align-items:center}.inline>*{flex:1}
+.warning{margin-top:8px;color:#fcd34d;background:#2b2314;border:1px solid #5b461f;padding:8px;border-radius:7px;font-size:11.5px}
+.alert{min-height:22px;font-size:12px;color:var(--muted);padding-top:5px}
+.countdown{font-weight:800;font-size:24px;color:var(--lime)}
+.verify-box{background:#0e1828;border:1px dashed #3a506d;border-radius:8px;padding:10px;text-align:center;margin-top:8px}
+.verify-status{margin-top:6px;font-weight:700;font-size:12px}
+footer{text-align:center;padding:10px 20px 24px;color:var(--muted);font-size:11.5px}
+@media(max-width:1150px){main{grid-template-columns:260px 1fr}.rightstack{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr}}
+@media(max-width:760px){main{grid-template-columns:1fr;padding:12px}.rightstack{grid-column:auto;display:flex}header{padding:12px}.formline{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="brand">FAMILY AI <em>GAME DAY</em> <span class="track-badge">ADVANCED TRACK · 5 GAMES</span></div>
+    <div class="subtitle">Abu Dhabi University Challenge · Live AI Referee MVP & Report Verifier</div>
+  </div>
+  <div class="status">
+    <span id="connectionDot" class="dot"></span>
+    <span id="connectionLabel">Connecting to Python AI Judge…</span>
+  </div>
+</header>
+
+<main>
+<!-- Left Sidebar: ADU Steps 1 & 2 & 3 -->
+<aside class="sidebar">
+  <section class="panel">
+    <h2>01 / Choose Game <span class="tiny">5 Games</span></h2>
+    <div id="gameChoices"></div>
+    <div class="tiny" style="margin-top:6px">Football is mandatory for Advanced Track + 4 team games.</div>
+  </section>
+
+  <section class="panel">
+    <h2>02 / Players & Teams</h2>
+    <div class="formline">
+      <div>
+        <label>Team A Name</label>
+        <input id="teamA" value="Team A"/>
+      </div>
+      <div>
+        <label>Team B Name</label>
+        <input id="teamB" value="Team B"/>
+      </div>
+    </div>
+    <div class="space"></div>
+    <div class="formline">
+      <div>
+        <label>Team A Jersey Color</label>
+        <select id="colorA">
+          <option value="red" selected>Red</option>
+          <option value="orange">Orange</option>
+          <option value="yellow">Yellow</option>
+          <option value="blue">Blue</option>
+          <option value="white">White</option>
+        </select>
+      </div>
+      <div>
+        <label>Team B Jersey Color</label>
+        <select id="colorB">
+          <option value="blue" selected>Blue</option>
+          <option value="red">Red</option>
+          <option value="purple">Purple</option>
+          <option value="yellow">Yellow</option>
+          <option value="white">White</option>
+        </select>
+      </div>
+    </div>
+    <div class="space"></div>
+    <div class="formline">
+      <div>
+        <label>Players A (comma-sep)</label>
+        <input id="playersA" value="Ali, Rashid"/>
+      </div>
+      <div>
+        <label>Players B (comma-sep)</label>
+        <input id="playersB" value="Zayed, Omar"/>
+      </div>
+    </div>
+    <div class="space"></div>
+    <div class="formline">
+      <div>
+        <label>Ball Tracking Color</label>
+        <select id="ballColor">
+          <option value="green" selected>Neon Green</option>
+          <option value="orange">Orange</option>
+          <option value="yellow">Yellow</option>
+          <option value="white">White</option>
+        </select>
+      </div>
+      <div>
+        <label>Attacking Team</label>
+        <select id="turn">
+          <option value="A">Team A Attack</option>
+          <option value="B">Team B Attack</option>
+        </select>
+      </div>
+    </div>
+    <div class="space"></div>
+    <button id="saveSetup" class="accent" style="width:100%">Save Teams & Colors</button>
+  </section>
+
+  <section class="panel">
+    <h2>03 / Rules & Calibration</h2>
+    <label>Round Duration (seconds)</label>
+    <input type="number" id="duration" min="15" max="3600" value="60"/>
+    <div class="space"></div>
+    <label>Ball Detection Mode</label>
+    <select id="ballMode">
+      <option value="marker" selected>Physical Circular Ball Prop (Strict CV)</option>
+      <option value="yolo">Trained AI Model (YOLO Sports-Ball)</option>
+    </select>
+    <div class="space"></div>
+    <div class="tiny">Goal Zone / Target Area Calibration:</div>
+    <div class="formline" style="margin-top:6px">
+      <button id="drawZone">▱ Draw Goal Zone</button>
+      <button id="defaultGoalBtn">⚽ Use Preset Goal</button>
+    </div>
+    <div class="space"></div>
+    <div class="formline">
+      <button id="sampleColor">◉ Sample Color</button>
+      <button id="baseline">Lagori Baseline</button>
+    </div>
+    <div class="alert" id="calibrationStatus">Goal net inactive until calibrated or preset is selected.</div>
+  </section>
+</aside>
+
+<!-- Center Column: ADU Step 4 Round in Play -->
+<section class="panel">
+  <div class="inline" style="margin-bottom:10px">
+    <div>
+      <h2 style="margin:0;color:var(--text);font-size:16px" id="gameTitle">Football AI Referee</h2>
+      <div class="subtitle" id="gameModeSub">Video Ingestion · Ball Tracking · Possession · MVP</div>
+    </div>
+    <div style="text-align:right">
+      <div class="tiny">MATCH CLOCK</div>
+      <div class="countdown" id="timeLeft">01:00</div>
+    </div>
+  </div>
+
+  <!-- Video Source Switcher Tabs -->
+  <div class="source-tabs">
+    <button class="source-tab active" id="tabCam">📷 Live Camera</button>
+    <button class="source-tab" id="tabUpload">📁 Upload Match Video</button>
+    <button class="source-tab" id="tabDemo">⚽ Sample Match Clip</button>
+  </div>
+
+  <div class="camera" id="videoFrame">
+    <video id="video" playsinline muted crossorigin="anonymous"></video>
+    <canvas id="overlay"></canvas>
+    <div class="empty" id="empty">
+      <div>
+        <div style="font-size:42px">⚽</div>
+        <p style="font-weight:600;margin-top:6px">Select Live Camera, Upload a Video, or Play Demo Clip</p>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="videoFileInput" accept="video/mp4,video/webm,video/ogg,video/quicktime" style="display:none"/>
+
+  <div class="toolbar">
+    <button id="cameraBtn" class="primary">Start Camera</button>
+    <button id="flipCamBtn" style="padding:10px 14px" title="Switch between Front and Back camera">🔄 Flip Camera</button>
+    <button id="uploadBtn" class="blue" style="display:none">Choose Video File</button>
+    <button id="demoBtn" class="accent" style="display:none">▶ Play Sample Match</button>
+    <button id="startBtn" class="primary">▶ Start Round</button>
+    <button id="pauseBtn">Ⅱ Pause</button>
+    <button id="finishBtn">■ End Round</button>
+    <button id="resetBtn" class="danger">↻ Reset</button>
+  </div>
+
+  <!-- Playback scrubber for video mode -->
+  <div id="videoScrubberRow" style="display:none;margin-top:10px;align-items:center;gap:10px">
+    <button id="vidPlayPause" style="padding:4px 10px;font-size:12px">▶ Play</button>
+    <input type="range" id="vidSeek" min="0" max="100" value="0" style="flex:1"/>
+    <span id="vidTime" class="tiny">0:00 / 0:00</span>
+  </div>
+
+  <div class="hints" id="gameHint"></div>
+
+  <div class="legend">
+    <span><b>●</b> ⚽ Ball Track</span>
+    <span style="color:var(--red)">■ Team A Player</span>
+    <span style="color:var(--blue)">■ Team B Player</span>
+    <span style="color:#69c6ff">▱ Goal Net Area</span>
+  </div>
+
+  <div class="warning" id="safety">
+    Official ADU Rule: AI must follow players and ball, show which team had the ball most, and award MVP to the player with the most possession time.
+  </div>
+  <div class="alert" id="message"></div>
+</section>
+
+<!-- Right Column: ADU Steps 5 & 6 AI Results & Final MVP -->
+<div class="rightstack">
+  <section class="panel">
+    <h2>04 / Live Scoreboard <span class="pill" id="roundState">READY</span></h2>
+    <div class="statrow">
+      <div class="stat">
+        <span id="labelA">TEAM A</span>
+        <strong class="scoreA" id="scoreA">0</strong>
+      </div>
+      <div class="stat">
+        <span id="labelB">TEAM B</span>
+        <strong class="scoreB" id="scoreB">0</strong>
+      </div>
+    </div>
+
+    <!-- Team Possession Bar -->
+    <div class="possession-container" id="possessionBox">
+      <div class="pos-labels">
+        <span style="color:var(--red)"><span id="posTeamA">Team A</span>: <b id="pctA">50%</b> (<span id="secA">0.0s</span>)</span>
+        <span style="color:var(--blue)"><span id="posTeamB">Team B</span>: <b id="pctB">50%</b> (<span id="secB">0.0s</span>)</span>
+      </div>
+      <div class="possession-bar">
+        <div id="barA" class="pos-a" style="width:50%"></div>
+        <div id="barB" class="pos-b" style="width:50%"></div>
+      </div>
+      <div class="tiny" style="text-align:center;margin-top:2px">Team Ball Possession Time</div>
+    </div>
+
+    <!-- MVP Leader Trophy Card -->
+    <div class="mvp-box" id="mvpCard">
+      <div class="mvp-icon">🏆</div>
+      <div class="mvp-text">
+        <strong id="mvpName">No possession recorded yet</strong>
+        <small id="mvpDesc">Most Valuable Player (most ball time)</small>
+      </div>
+    </div>
+
+    <!-- Player Possession Breakdown -->
+    <div class="tiny" style="font-weight:700;margin-top:8px">PLAYER POSSESSION LEADERBOARD:</div>
+    <table class="players-table" id="playersTable">
+      <thead>
+        <tr><th>Player</th><th>Team</th><th>Ball Time</th></tr>
+      </thead>
+      <tbody id="playersBody">
+        <tr><td colspan="3" class="tiny">Waiting for match action…</td></tr>
+      </tbody>
+    </table>
+
+    <div class="space"></div>
+    <div id="winner" class="good" style="font-weight:700;text-align:center;font-size:15px"></div>
+
+    <div class="formline" style="margin-top:6px">
+      <button id="plus">+1 Goal Correction</button>
+      <button id="minus">−1 Goal Correction</button>
+    </div>
+
+    <!-- Sagala buttons kept for UAE game -->
+    <div id="sagalaControls" style="display:none;margin-top:8px">
+      <div class="metric"><span>Pending Catches</span><strong id="candidates">0</strong></div>
+      <div class="formline" style="margin-top:6px">
+        <button id="acceptCatch">✓ Approve Catch</button>
+        <button id="rejectCatch">✕ Reject Catch</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 5: AI Observations & Audio Referee -->
+  <section class="panel">
+    <h2>05 / AI Judge Audio & Vision</h2>
+    <div class="metric"><span>Ball Tracking</span><strong id="ballTrackState">Active (Color)</strong></div>
+    <div class="metric"><span>Player Classification</span><strong id="playerTrackState">Jersey Color (Fast)</strong></div>
+    <div class="metric"><span>YOLO Sports Model</span><strong id="yoloReady">—</strong></div>
+    <div class="space"></div>
+    <button id="audioBtn" style="width:100%" class="accent">🎙 Enable Audio Referee Cues</button>
+    <div class="space"></div>
+    <button id="enableYolo" style="width:100%" class="tiny">Optional: Enable YOLO Player Tracking</button>
+    <div class="space"></div>
+    <div class="diagnostics" id="diagnostics">AI referee ready…</div>
+  </section>
+
+  <!-- Step 6: Referee Evidence Trail & Report Verification -->
+  <section class="panel">
+    <h2>06 / Audit Evidence Trail</h2>
+    <button id="download" style="width:100%" class="primary">↓ Download Match Report (.JSON)</button>
+    
+    <!-- Report Cryptographic Verification -->
+    <div class="verify-box">
+      <div class="tiny" style="font-weight:700">INTEGRITY CHECKER (ADU REQUIREMENT)</div>
+      <div class="tiny">Verify report hasn't been changed using HMAC key:</div>
+      <input type="file" id="verifyFileInput" accept=".json" style="margin-top:6px"/>
+      <div id="verifyStatus" class="verify-status"></div>
+    </div>
+
+    <div class="space"></div>
+    <div class="tiny" style="font-weight:700">LIVE REFEREE EVENTS:</div>
+    <div class="events" id="events">
+      <div class="tiny">Events appear here after round start.</div>
+    </div>
+  </section>
+</div>
+</main>
+
+<footer>Family AI Game Day · Advanced Track · Local Video Ingestion & Vision Scorer. Tamper-evident HMAC signature chain.</footer>
+
+<script>
+const $=(id)=>document.getElementById(id);
+const games={
+  football:['⚽','Football','Compulsory · Goals & MVP'],
+  lagori:['🪨','Lagori','India · Stack Knockdown'],
+  kancha:['🔮','Kancha','India · Marble Target'],
+  gaheef:['🦶','Al Gaheef','UAE · Hopping Grid'],
+  sagala:['🖐️','Al Sagala','UAE · Pebble Catch']
+};
+
+let ws,stream=null,sendBusy=false,frameTimer=null,state=null,dets=[],mode='none',dragStart=null,previewZone=null,latestDiag=null;
+let videoSource='cam'; // 'cam', 'upload', 'demo'
+
+// Populate Game choices
+$('gameChoices').innerHTML=Object.entries(games).map(([id,g])=>
+  `<div class="choice ${id==='football'?'active':''}" data-game="${id}">
+    <span class="symbol">${g[0]}</span>
+    <span><strong>${g[1]}</strong><small>${g[2]}</small></span>
+  </div>`
+).join('');
+
+function notice(m,err=false){
+  $('message').textContent=m;
+  $('message').className=err?'alert error':'alert good';
+}
+
+function control(command,more={}){
+  if(!ws||ws.readyState!==1){
+    notice('AI server not connected',true);
+    return;
+  }
+  ws.send(JSON.stringify({command,...more}));
+}
+
+function wsConnect(){
+  ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`);
+  ws.onopen=()=>{
+    $('connectionDot').classList.add('on');
+    $('connectionLabel').textContent='AI Server Connected';
+  };
+  ws.onclose=()=>{
+    $('connectionDot').classList.remove('on');
+    $('connectionLabel').textContent='Disconnected';
+    sendBusy=false;
+    setTimeout(wsConnect,2000);
+  };
+  ws.onerror=()=>notice('Socket connection failed — ensure server is running',true);
+  ws.onmessage=e=>{
+    const m=JSON.parse(e.data);
+    if(m.type==='error'){sendBusy=false;notice(m.message,true);return;}
+    if(m.state){state=m.state;renderState();}
+    if(m.type==='frame'){
+      sendBusy=false;
+      dets=m.detections||[];
+      latestDiag=m.diagnostics;
+      draw();
+      $('diagnostics').textContent=JSON.stringify(latestDiag,null,2);
+    }
+  };
+}
+
+function niceTime(x){
+  let s=Math.max(0,Math.ceil(x));
+  return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+}
+
+function renderState(){
+  if(!state)return;
+  $('gameTitle').textContent=state.name;
+  $('labelA').textContent=state.teams.A;
+  $('labelB').textContent=state.teams.B;
+  $('posTeamA').textContent=state.teams.A;
+  $('posTeamB').textContent=state.teams.B;
+  $('scoreA').textContent=state.scores.A;
+  $('scoreB').textContent=state.scores.B;
+  $('timeLeft').textContent=niceTime(state.duration-state.elapsed);
+  $('roundState').textContent=state.started?'LIVE':state.finished?'FINAL':'READY / PAUSED';
+  $('winner').textContent=state.finished?('🏆 '+(state.winner==='Draw'?'Match Draw':state.winner+' Wins!')):'';
+
+  // Possession Bar
+  if(state.possession_pct){
+    const pa = state.possession_pct.A || 50;
+    const pb = state.possession_pct.B || 50;
+    $('barA').style.width = pa + '%';
+    $('barB').style.width = pb + '%';
+    $('pctA').textContent = pa + '%';
+    $('pctB').textContent = pb + '%';
+    $('secA').textContent = (state.team_possession?.A || 0) + 's';
+    $('secB').textContent = (state.team_possession?.B || 0) + 's';
+  }
+
+  // MVP Presentation
+  if(state.mvp && state.mvp.name){
+    $('mvpName').textContent = `🏆 ${state.mvp.name} (${state.mvp.team})`;
+    $('mvpDesc').textContent = `MVP Leader with ${state.mvp.seconds}s of ball possession`;
+    $('mvpCard').style.display = 'flex';
+  } else {
+    $('mvpName').textContent = 'No possession recorded yet';
+    $('mvpDesc').textContent = 'The player who controls the ball most becomes MVP';
+  }
+
+  // Player possession table
+  if(state.player_possession && state.player_possession.length){
+    $('playersBody').innerHTML = state.player_possession.map(p => {
+      const isDribbler = state.active_possession === p.player;
+      return `<tr class="${isDribbler ? 'has-ball' : ''}">
+        <td>${isDribbler ? '⚽ ' : ''}${esc(p.player)}</td>
+        <td>${p.team === 'A' ? state.teams.A : state.teams.B}</td>
+        <td>${p.seconds}s</td>
+      </tr>`;
+    }).join('');
+  } else {
+    $('playersBody').innerHTML = '<tr><td colspan="3" class="tiny">Waiting for players near ball…</td></tr>';
+  }
+
+  // Models state
+  $('yoloReady').textContent = state.models?.yolo?.includes('enabled') ? 'ON (YOLO26n)' : 'OFF (Color/CV)';
+  $('sagalaControls').style.display = state.game === 'sagala' ? 'block' : 'none';
+  if(state.game === 'sagala') $('candidates').textContent = state.sagala_candidates;
+
+  document.querySelectorAll('.choice').forEach(e => e.classList.toggle('active', e.dataset.game === state.game));
+  $('baseline').disabled = state.game !== 'lagori';
+
+  // Events Trail
+  $('events').innerHTML = state.events.length
+    ? state.events.map(e => `
+        <div class="event">
+          <small>#${e.number} · ${new Date(e.timestamp).toLocaleTimeString()} · ${esc(e.turn)} · ${e.points?('+'+e.points):'0'} pt</small>
+          <p>${esc(e.label)}</p>
+          ${e.review_required ? '<span class="review">Provisional Result</span>' : ''}
+        </div>
+      `).join('')
+    : '<div class="tiny">Events appear here after round start.</div>';
+
+  draw();
+}
+
+function esc(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+// Video Source Switcher Tabs
+$('tabCam').onclick=()=>{
+  videoSource='cam';
+  $('tabCam').classList.add('active');
+  $('tabUpload').classList.remove('active');
+  $('tabDemo').classList.remove('active');
+  $('cameraBtn').style.display='inline-block';
+  $('uploadBtn').style.display='none';
+  $('demoBtn').style.display='none';
+  $('videoScrubberRow').style.display='none';
+  stopVideoFile();
+};
+
+$('tabUpload').onclick=()=>{
+  videoSource='upload';
+  $('tabUpload').classList.add('active');
+  $('tabCam').classList.remove('active');
+  $('tabDemo').classList.remove('active');
+  $('cameraBtn').style.display='none';
+  $('uploadBtn').style.display='inline-block';
+  $('demoBtn').style.display='none';
+  $('videoScrubberRow').style.display='flex';
+  stopCamera();
+};
+
+$('tabDemo').onclick=()=>{
+  videoSource='demo';
+  $('tabDemo').classList.add('active');
+  $('tabCam').classList.remove('active');
+  $('tabUpload').classList.remove('active');
+  $('cameraBtn').style.display='none';
+  $('uploadBtn').style.display='none';
+  $('demoBtn').style.display='inline-block';
+  $('videoScrubberRow').style.display='flex';
+  stopCamera();
+  loadDemoVideo();
+};
+
+let currentFacingMode = 'environment';
+
+async function camera(modeOverride){
+  if(modeOverride){
+    currentFacingMode = modeOverride;
+    if(stream) stopCamera();
+  } else if(stream){
+    stopCamera();
+    return;
+  }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if(!isLocal && location.protocol !== 'https:'){
+      notice('Camera blocked: Mobile phones require HTTPS for camera streaming. Please open ' + location.href.replace('http:', 'https:') + ' in your browser.', true);
+      return;
+    }
+    notice('Camera API is not supported on this browser or platform.', true);
+    return;
+  }
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{
+        width:{ideal:1280},
+        height:{ideal:720},
+        facingMode:{ideal: currentFacingMode}
+      },
+      audio:false
+    });
+    $('video').srcObject=stream;
+    await $('video').play();
+    $('empty').classList.add('hidden');
+    $('cameraBtn').textContent='Stop Camera';
+    startStreaming();
+    notice(`Live camera active (${currentFacingMode === 'environment' ? 'Rear / Field' : 'Front / Selfie'}).`);
+  }catch(ex){
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({video:true, audio:false});
+      $('video').srcObject=stream;
+      await $('video').play();
+      $('empty').classList.add('hidden');
+      $('cameraBtn').textContent='Stop Camera';
+      startStreaming();
+      notice('Live camera active (standard fallback).');
+    }catch(ex2){
+      notice(`Camera unavailable: ${ex.message}. You can also use Upload Video or Sample Match clip.`,true);
+    }
+  }
+}
+
+$('flipCamBtn').onclick=()=>{
+  currentFacingMode = (currentFacingMode === 'environment' ? 'user' : 'environment');
+  if(stream){
+    camera(currentFacingMode);
+  } else {
+    notice(`Camera mode set to: ${currentFacingMode === 'environment' ? 'Rear / Field' : 'Front / Selfie'}. Click Start Camera to begin.`);
+  }
+};
+
+function stopCamera(){
+  if(stream){
+    stream.getTracks().forEach(t=>t.stop());
+    stream=null;
+    $('cameraBtn').textContent='Start Camera';
+    $('empty').classList.remove('hidden');
+  }
+}
+
+function stopVideoFile(){
+  const v = $('video');
+  v.pause();
+  v.src = '';
+  v.srcObject = null;
+  $('empty').classList.remove('hidden');
+}
+
+// Upload Video File
+$('uploadBtn').onclick=()=>$('videoFileInput').click();
+$('videoFileInput').onchange=(e)=>{
+  const file = e.target.files[0];
+  if(!file)return;
+  const url = URL.createObjectURL(file);
+  const v = $('video');
+  v.srcObject = null;
+  v.src = url;
+  v.loop = true;
+  v.play().then(()=>{
+    $('empty').classList.add('hidden');
+    startStreaming();
+    notice(`Loaded video file: ${file.name}`);
+  }).catch(err=>notice('Error playing video: '+err.message,true));
+};
+
+function loadDemoVideo(){
+  const v = $('video');
+  v.srcObject = null;
+  v.src = '/static/demo_football.mp4';
+  v.loop = true;
+  control('default_goal');
+  v.play().then(()=>{
+    $('empty').classList.add('hidden');
+    startStreaming();
+    notice('Playing sample football match clip. Goal net calibrated.');
+  }).catch(err=>notice('Error loading demo video: '+err.message,true));
+}
+
+$('demoBtn').onclick=()=>loadDemoVideo();
+
+// Video playback controls
+$('vidPlayPause').onclick=()=>{
+  const v = $('video');
+  if(v.paused){ v.play(); $('vidPlayPause').textContent='Ⅱ Pause'; }
+  else { v.pause(); $('vidPlayPause').textContent='▶ Play'; }
+};
+
+$('video').ontimeupdate=()=>{
+  const v = $('video');
+  if(!v.duration)return;
+  $('vidSeek').value = (v.currentTime / v.duration) * 100;
+  $('vidTime').textContent = `${niceTime(v.currentTime)} / ${niceTime(v.duration)}`;
+};
+
+$('vidSeek').oninput=()=>{
+  const v = $('video');
+  if(v.duration) v.currentTime = ($('vidSeek').value / 100) * v.duration;
+};
+
+// Stream frames via WebSocket
+function startStreaming(){
+  const capture=document.createElement('canvas');
+  capture.width=640;
+  capture.height=360;
+  const cx=capture.getContext('2d',{willReadFrequently:true});
+  if(frameTimer)clearInterval(frameTimer);
+  frameTimer=setInterval(()=>{
+    if(!ws||ws.readyState!==1||sendBusy||$('video').readyState<2)return;
+    const vw=$('video').videoWidth,vh=$('video').videoHeight;
+    if(!vw||!vh)return;
+    const cropW=Math.min(vw,vh*16/9),cropH=Math.min(vh,vw*9/16);
+    cx.drawImage($('video'),(vw-cropW)/2,(vh-cropH)/2,cropW,cropH,0,0,640,360);
+    sendBusy=true;
+    capture.toBlob(async blob=>{
+      try{
+        if(!blob){sendBusy=false;return;}
+        const buf=await blob.arrayBuffer();
+        if(ws.readyState===1)ws.send(buf);
+        else sendBusy=false;
+      }catch(ex){
+        sendBusy=false;
+        notice(ex.message,true);
+      }
+    },'image/jpeg',0.70);
+  },130);
+}
+
+// Canvas Overlay Drawing
+function draw(){
+  const canvas=$('overlay');
+  if(!state)return;
+  let w=canvas.clientWidth,h=canvas.clientHeight;
+  if(!w||!h)return;
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=Math.round(w*dpr);
+  canvas.height=Math.round(h*dpr);
+  const cx=canvas.getContext('2d');
+  cx.scale(dpr,dpr);
+
+  // Scoring Zone (Goal Net)
+  const isCalibrated = (state.game !== 'football') || state.goal_calibrated || (previewZone !== null);
+  const zone=previewZone||state.zone;
+  if(isCalibrated && zone && zone[2] > 0 && zone[3] > 0){
+    cx.setLineDash([7,4]);
+    cx.strokeStyle='#38bdf8';
+    cx.lineWidth=2;
+    cx.strokeRect(zone[0]*w,zone[1]*h,zone[2]*w,zone[3]*h);
+    cx.setLineDash([]);
+    cx.fillStyle='#38bdf8';
+    cx.font='bold 12px sans-serif';
+    cx.fillText(state.game==='football'?'⚽ GOAL NET':state.game==='kancha'?'TARGET':state.game==='lagori'?'STACK':'AREA',zone[0]*w+6,zone[1]*h+15);
+  }
+
+  // Render detections (Ball and Players)
+  for(const item of dets){
+    if(item.kind === 'ball'){
+      // Glow on ball
+      cx.beginPath();
+      cx.arc(item.x*w, item.y*h, 10, 0, Math.PI*2);
+      cx.fillStyle = '#38ef7d';
+      cx.shadowColor = '#38ef7d';
+      cx.shadowBlur = 10;
+      cx.fill();
+      cx.shadowBlur = 0;
+      cx.fillStyle = '#fff';
+      cx.font = 'bold 12px sans-serif';
+      cx.fillText('⚽ BALL', item.x*w + 12, item.y*h - 6);
+    } else if(item.kind === 'player'){
+      const color = item.team === 'A' ? '#f87171' : '#38bdf8';
+      // Draw player box
+      if(item.box){
+        cx.strokeStyle = color;
+        cx.lineWidth = item.has_ball ? 3 : 1.5;
+        cx.strokeRect(item.box[0]*w, item.box[1]*h, item.box[2]*w, item.box[3]*h);
+      }
+      // Draw foot position dot
+      if(item.foot){
+        cx.beginPath();
+        cx.arc(item.foot[0]*w, item.foot[1]*h, 5, 0, Math.PI*2);
+        cx.fillStyle = color;
+        cx.fill();
+      }
+      // Label
+      cx.fillStyle = item.has_ball ? '#38ef7d' : '#ffffff';
+      cx.font = item.has_ball ? 'bold 12px sans-serif' : '11px sans-serif';
+      cx.fillText(item.label, item.x*w - 20, item.y*h - 18);
+    } else {
+      cx.beginPath();
+      cx.arc(item.x*w, item.y*h, 7, 0, Math.PI*2);
+      cx.fillStyle = '#38ef7d';
+      cx.fill();
+    }
+  }
+}
+
+function point(e){
+  const r=$('overlay').getBoundingClientRect();
+  return [Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))];
+}
+
+$('overlay').addEventListener('pointerdown',e=>{
+  if(mode==='none')return;
+  const p=point(e);
+  if(mode==='sample'){
+    control('sample',{value:p});
+    mode='none';
+    $('calibrationStatus').textContent='Target color sampled from image.';
+    return;
+  }
+  dragStart=p;
+  $('overlay').setPointerCapture(e.pointerId);
+});
+
+$('overlay').addEventListener('pointermove',e=>{
+  if(!dragStart||mode!=='zone')return;
+  const p=point(e);
+  previewZone=[Math.min(p[0],dragStart[0]),Math.min(p[1],dragStart[1]),Math.abs(p[0]-dragStart[0]),Math.abs(p[1]-dragStart[1])];
+  draw();
+});
+
+$('overlay').addEventListener('pointerup',e=>{
+  if(!dragStart)return;
+  const p=point(e);
+  const zone=[Math.min(p[0],dragStart[0]),Math.min(p[1],dragStart[1]),Math.abs(p[0]-dragStart[0]),Math.abs(p[1]-dragStart[1])];
+  dragStart=null;
+  previewZone=null;
+  mode='none';
+  if(zone[2]>0.02 && zone[3]>0.02){
+    control('zone',{value:zone});
+    $('calibrationStatus').textContent='Scoring goal region updated.';
+  }
+  draw();
+});
+
+// Controls & Click handlers
+document.querySelectorAll('.choice').forEach(e=>e.onclick=()=>{
+  control('game',{value:e.dataset.game});
+  dets=[];
+});
+
+$('cameraBtn').onclick=camera;
+$('startBtn').onclick=()=>control('start');
+$('pauseBtn').onclick=()=>control('stop');
+$('finishBtn').onclick=()=>control('finish');
+$('resetBtn').onclick=()=>control('reset');
+$('turn').onchange=()=>control('attacking',{value:$('turn').value});
+$('plus').onclick=()=>control('manual_score',{points:1});
+$('minus').onclick=()=>control('manual_score',{points:-1});
+$('acceptCatch').onclick=()=>control('confirm_sagala');
+$('rejectCatch').onclick=()=>control('reject_sagala');
+$('enableYolo').onclick=()=>{
+  notice('Loading YOLO sports tracking weights…');
+  control('enable_yolo');
+};
+
+$('saveSetup').onclick=()=>{
+  for(const t of ['A','B']){
+    control('team',{
+      team:t,
+      name:$('team'+t).value,
+      players:$('players'+t).value.split(',').map(x=>x.trim()).filter(Boolean)
+    });
+    control('team_color',{
+      team:t,
+      value:$('color'+t).value
+    });
+  }
+  control('ball_color',{value:$('ballColor').value});
+  control('duration',{value:Number($('duration').value)});
+  control('attacking',{value:$('turn').value});
+  notice('Teams, jersey colors, and match rules saved.');
+};
+
+$('drawZone').onclick=()=>{
+  mode='zone';
+  $('calibrationStatus').textContent='Click and drag a box over the goal area on the video.';
+};
+
+$('defaultGoalBtn').onclick=()=>{
+  control('default_goal');
+  notice('Default goal net region applied.');
+  $('calibrationStatus').textContent='Preset goal net activated.';
+};
+
+$('ballMode').onchange=()=>control('ball_mode',{value:$('ballMode').value});
+
+$('sampleColor').onclick=()=>{
+  mode='sample';
+  $('calibrationStatus').textContent='Click on the ball in the video frame to sample its color.';
+};
+
+// Download signed JSON report
+$('download').onclick=()=>{
+  if(!state)return;
+  fetch(`/api/report/${encodeURIComponent(state.session)}`)
+    .then(r=>{if(!r.ok)throw Error('Cannot fetch report');return r.blob();})
+    .then(b=>{
+      const u=URL.createObjectURL(b),a=document.createElement('a');
+      a.href=u;
+      a.download=`AI_Referee_${state.game}_${state.session}.json`;
+      a.click();
+      URL.revokeObjectURL(u);
+      notice('Match report downloaded.');
+    }).catch(e=>notice(e.message,true));
+};
+
+// Report Verification Dropzone (ADU Rubric requirement)
+$('verifyFileInput').onchange=(e)=>{
+  const file=e.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=(evt)=>{
+    try{
+      const reportData=JSON.parse(evt.target.result);
+      fetch('/api/verify',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(reportData)
+      })
+      .then(r=>r.json())
+      .then(res=>{
+        if(res.valid){
+          $('verifyStatus').innerHTML='<span style="color:var(--lime)">✓ Authentic: All HMAC signatures verified valid!</span>';
+        } else {
+          $('verifyStatus').innerHTML=`<span style="color:var(--red)">✕ Tampered: ${res.description}</span>`;
+        }
+      });
+    }catch(err){
+      $('verifyStatus').innerHTML='<span style="color:var(--red)">✕ Invalid JSON file</span>';
+    }
+  };
+  reader.readAsText(file);
+};
+
+// Audio referee cues
+let recognizer=null;
+$('audioBtn').onclick=()=>{
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(recognizer){
+    recognizer.stop();
+    recognizer=null;
+    $('audioBtn').textContent='🎙 Enable Audio Referee Cues';
+    return;
+  }
+  if(!SR){
+    notice('Speech recognition not supported in this browser. Video judging remains active.',true);
+    return;
+  }
+  const sr=new SR();
+  sr.lang='en-US';
+  sr.continuous=true;
+  sr.interimResults=false;
+  sr.onresult=e=>{
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal){
+        const txt=e.results[i][0].transcript.toLowerCase().trim();
+        control('audio_cue',{value:txt});
+        notice('Referee heard: "'+txt+'"');
+        if(txt.includes('goal')){
+          control('manual_score',{points:1});
+        } else if(txt.includes('pause') || txt.includes('stop')){
+          control('stop');
+        } else if(txt.includes('start') || txt.includes('play')){
+          control('start');
+        }
+      }
+    }
+  };
+  sr.onerror=e=>notice('Audio error: '+e.error,true);
+  sr.onend=()=>{
+    if(recognizer===sr){
+      recognizer=null;
+      $('audioBtn').textContent='🎙 Enable Audio Referee Cues';
+    }
+  };
+  try{
+    sr.start();
+    recognizer=sr;
+    $('audioBtn').textContent='■ Stop Audio Referee';
+    notice('Audio referee active: recognizes "Goal", "Start", "Pause".');
+  }catch(e){notice(e.message,true);}
+};
+
+window.addEventListener('resize',draw);
+wsConnect();
+</script>
+</body>
+</html>
