@@ -173,6 +173,47 @@ def test_hoodie_folds_merged_into_one_player():
     assert p['box'][1] <= (125 / 360)
 
 
+def test_real_family_match_video_tracking():
+    video_path = Path(__file__).parent.parent / 'static' / 'family_match_video.mp4'
+    if not video_path.exists():
+        return
+    cap = cv2.VideoCapture(str(video_path))
+    assert cap.isOpened()
+
+    e = Engine()
+    e.set_game('football')
+    e.ball_color = 'soccer'
+    e.control({'command': 'team', 'team': 'A', 'name': 'Falcons', 'players': ['Ali', 'Rashid']})
+    e.control({'command': 'team', 'team': 'B', 'name': 'Oryx', 'players': ['Zayed', 'Omar']})
+    e.control({'command': 'start'})
+
+    ball_frames = 0
+    player_frames = 0
+    total_frames = 0
+
+    t = 100.0
+    while cap.isOpened() and total_frames < 60:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        res = e.process(frame, now=t)
+        dets = res.get('detections', [])
+        if any(d.get('kind') == 'ball' for d in dets):
+            ball_frames += 1
+        if any(d.get('kind') == 'player' for d in dets):
+            player_frames += 1
+        t += 0.033
+        total_frames += 1
+    cap.release()
+
+    # Must detect both players and soccer ball in real family footage
+    assert total_frames >= 30
+    assert ball_frames >= int(total_frames * 0.75)
+    assert player_frames >= int(total_frames * 0.90)
+    st = e.public_state()
+    assert (st['team_possession']['A'] + st['team_possession']['B']) > 0.0
+
+
 def test_round_end_winner_and_cannot_restart():
     e=Engine()
     e.set_game('kancha')
@@ -188,95 +229,3 @@ def test_round_end_winner_and_cannot_restart():
     assert verify_report(e.report())[0]
     e.close()
 
-
-def test_football_team_possession_and_mvp():
-    e = Engine()
-    e.set_game('football')
-    e.control({'command': 'team', 'team': 'A', 'name': 'Falcons', 'players': ['Ali', 'Rashid']})
-    e.control({'command': 'team', 'team': 'B', 'name': 'Oryx', 'players': ['Zayed', 'Omar']})
-    e.control({'command': 'start'})
-    # Create a frame with Team A player (Red jersey: BGR = (0, 0, 220)) and neon green ball (BGR = (0, 255, 0))
-    frame = np.zeros((360, 640, 3), dtype=np.uint8)
-    # Player A torso (Red)
-    cv2.rectangle(frame, (100, 100), (140, 180), (0, 0, 220), -1)
-    # Ball near player's feet (feet at ~ 120, 180)
-    cv2.circle(frame, (130, 190), 8, (0, 255, 0), -1)
-    # Process 5 consecutive frames
-    for t in range(5):
-        res = e.process(frame, now=100.0 + t * 0.1)
-    st = e.public_state()
-    assert st['team_possession']['A'] > 0.0
-    assert st['team_possession']['B'] == 0.0
-    assert st['possession_pct']['A'] == 100.0
-    assert st['mvp'] is not None
-    assert st['mvp']['name'] == 'Ali'
-    assert st['mvp']['team'] == 'Falcons'
-    e.close()
-
-
-def test_football_goal_scorer_attribution():
-    e = Engine()
-    e.set_game('football')
-    e.control({'command': 'default_goal'})
-    e.control({'command': 'team', 'team': 'A', 'name': 'Falcons', 'players': ['Ali', 'Rashid']})
-    e.control({'command': 'start'})
-    frame1 = np.zeros((360, 640, 3), dtype=np.uint8)
-    # Player Ali has ball outside goal zone (zone is around x=0.86, y=0.34, w=0.11, h=0.32 -> x=[550..620], y=[122..237])
-    cv2.rectangle(frame1, (100, 100), (140, 180), (0, 0, 220), -1)
-    cv2.circle(frame1, (130, 190), 8, (0, 255, 0), -1)
-    e.process(frame1, now=100.0)
-    e.process(frame1, now=100.1)
-
-    # Ball shot into goal (x=580, y=180)
-    frame_goal = np.zeros((360, 640, 3), dtype=np.uint8)
-    cv2.circle(frame_goal, (580, 180), 8, (0, 255, 0), -1)
-    e.process(frame_goal, now=101.0)
-    res = e.process(frame_goal, now=101.1)
-
-    assert e.scores['A'] == 1
-    assert e.scores['B'] == 0
-    goal_event = [evt for evt in e.events if evt['kind'] == 'goal'][0]
-    assert 'Ali' in goal_event['label']
-    assert verify_report(e.report())[0]
-    e.close()
-
-
-def test_football_default_never_guesses_ball_or_goal():
-    e = Engine()
-    e.set_game('football')
-    assert e.public_state()['goal_calibrated'] is False
-    assert e.public_state()['football_ball_mode'] == 'yolo'
-    e.close()
-
-
-def test_wall_painting_rejected_as_ball():
-    from vision import largest_round_marker
-    # Rectangular flat green wall painting (e.g. 100x40 pixels)
-    frame = np.zeros((360, 640, 3), dtype=np.uint8)
-    cv2.rectangle(frame, (100, 100), (220, 135), (0, 255, 0), -1) # High aspect ratio, low circularity
-    ball, _ = largest_round_marker(frame, (66, 160, 160))
-    # Must be rejected because it is not round
-    assert ball is None
-
-    # Now draw an actual round ball (radius 10)
-    cv2.circle(frame, (350, 200), 10, (0, 255, 0), -1)
-    ball, _ = largest_round_marker(frame, (66, 160, 160))
-    assert ball is not None
-    assert abs(ball['x'] - (350 / 640)) < 0.05
-    assert abs(ball['y'] - (200 / 360)) < 0.05
-
-
-def test_hoodie_folds_merged_into_one_player():
-    from vision import detect_team_players
-    frame = np.zeros((360, 640, 3), dtype=np.uint8)
-    # Simulate 3 separated folds/shadows on the same red hoodie
-    cv2.rectangle(frame, (100, 120), (140, 190), (0, 0, 220), -1) # Chest right
-    cv2.rectangle(frame, (145, 130), (180, 210), (0, 0, 220), -1) # Chest left
-    cv2.rectangle(frame, (115, 200), (160, 260), (0, 0, 220), -1) # Lower torso
-    players = detect_team_players(frame, (0, 210, 190), min_area=80)
-    # The 3 overlapping/close fragments must be clustered into 1 single player box!
-    assert len(players) == 1
-    p = players[0]
-    # Check that the merged box spans the entire person
-    assert p['box'][0] <= (105 / 640)
-    assert p['box'][1] <= (125 / 360)

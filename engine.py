@@ -17,7 +17,7 @@ import time
 import uuid
 import cv2
 import numpy as np
-from vision import PRESETS, hsv_mask, largest_marker, largest_round_marker, coverage, in_zone, detect_blobs, PoseHands, OptionalYolo, detect_team_players, classify_person_team
+from vision import PRESETS, hsv_mask, largest_marker, largest_round_marker, coverage, in_zone, detect_blobs, PoseHands, OptionalYolo, detect_team_players, classify_person_team, detect_soccer_ball
 
 SIGNING_KEY = (os.getenv('JUDGE_SIGNING_KEY') or secrets.token_hex(32)).encode('utf-8')
 
@@ -55,13 +55,16 @@ class Engine:
         self.teams={'A':'Team A','B':'Team B'}
         self.players={'A':['P1','P2'],'B':['P3','P4']}
         self.team_colors={'A':'red','B':'blue'}
-        self.ball_color='green'
+        self.ball_color='soccer'
         self.football_ball_mode='yolo'
         self.goal_calibrated=False
         self.team_possession={'A':0.0,'B':0.0}
         self.player_possession=defaultdict(float)
         self.last_possession=None
         self.active_possession_player=None
+        self.fgbg=cv2.createBackgroundSubtractorMOG2(history=50,varThreshold=25,detectShadows=False)
+        self.last_ball=None
+        self.ball_lost_frames=0
         self.started=False
         self.last_frame_at=None
         self.elapsed=0.0
@@ -110,6 +113,9 @@ class Engine:
         self.player_possession=defaultdict(float)
         self.last_possession=None
         self.active_possession_player=None
+        self.fgbg=cv2.createBackgroundSubtractorMOG2(history=50,varThreshold=25,detectShadows=False)
+        self.last_ball=None
+        self.ball_lost_frames=0
         self._prev_now=None
         self.yolo_track_reset_needed=True
 
@@ -287,10 +293,34 @@ class Engine:
             ball = model_ball
             ball_source = 'YOLO sports ball' if ball else 'not detected'
         else:
-            # Strict circular marker check (requires roundness >= 0.60, rejects flat wall paintings)
-            marker, _ = largest_round_marker(frame, hsv_ball)
+            # Check for real soccer ball or circular color marker
+            if self.ball_color == 'soccer':
+                marker, _ = detect_soccer_ball(frame, getattr(self, 'fgbg', None))
+                if not marker:
+                    marker, _ = largest_round_marker(frame, PRESETS['white'])
+                if not marker:
+                    marker, _ = largest_round_marker(frame, PRESETS['green'])
+            elif self.ball_color == 'white':
+                marker, _ = detect_soccer_ball(frame, getattr(self, 'fgbg', None))
+                if not marker:
+                    marker, _ = largest_round_marker(frame, hsv_ball)
+            else:
+                marker, _ = largest_round_marker(frame, hsv_ball)
+                if not marker:
+                    marker, _ = detect_soccer_ball(frame, getattr(self, 'fgbg', None))
+
+            # Smooth ball tracking across brief occlusions (e.g. foot blocking ball for 1-3 frames)
+            if marker:
+                self.last_ball = marker
+                self.ball_lost_frames = 0
+            elif getattr(self, 'ball_lost_frames', 0) < 4 and getattr(self, 'last_ball', None) is not None:
+                marker = self.last_ball
+                self.ball_lost_frames += 1
+            else:
+                self.last_ball = None
+
             ball = marker if marker else model_ball
-            ball_source = f"circular marker ({self.ball_color})" if marker else ('YOLO ball' if model_ball else 'not detected')
+            ball_source = f"{'soccer ball' if self.ball_color in ['soccer', 'white'] else 'circular marker'} ({self.ball_color})" if marker else ('YOLO ball' if model_ball else 'not detected')
         pt = center(ball)
 
         all_players=[]

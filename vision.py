@@ -14,6 +14,7 @@ import numpy as np
 ROOT = Path(__file__).parent
 MODELS = ROOT / 'models'
 PRESETS = {
+    'soccer': (0, 0, 240),      # Classic soccer ball (white/black pentagons)
     'green': (66, 160, 160),    # Neon green ball / cones
     'orange': (14, 200, 200),   # Orange ball / bib
     'yellow': (30, 200, 200),   # Yellow ball / bib
@@ -34,9 +35,18 @@ def hsv_mask(frame: np.ndarray, hsv: tuple[int, int, int], tolerance: int = 15) 
     h, s, v = (int(x) for x in hsv)
     # White / low-saturation objects
     if s < 45:
-        mask = cv2.inRange(fhsv, (0, 0, max(160, v - 60)), (179, min(70, s + 40), 255))
+        mask = cv2.inRange(fhsv, (0, 0, max(140, v - 70)), (179, min(80, s + 50), 255))
     else:
-        s_min, v_min = max(45, s - 90), max(40, v - 110)
+        # Realistic tolerance: allow lower saturation for cotton/plaid and lower value for dark navy
+        if h <= 15 or h >= 165:  # Red / Crimson
+            s_min = max(40, min(s - 130, 60))
+            v_min = max(30, min(v - 130, 45))
+        elif 95 <= h <= 130:     # Blue / Navy
+            s_min = max(35, min(s - 140, 50))
+            v_min = max(25, min(v - 150, 35))
+        else:
+            s_min, v_min = max(45, s - 100), max(35, v - 110)
+
         lo, hi = (h - tolerance) % 180, (h + tolerance) % 180
         if lo <= hi:
             mask = cv2.inRange(fhsv, (lo, s_min, v_min), (hi, 255, 255))
@@ -167,23 +177,105 @@ def largest_round_marker(frame: np.ndarray, hsv: tuple[int, int, int]):
     }, mask
 
 
+def detect_soccer_ball(frame: np.ndarray, fgbg=None) -> tuple[dict | None, np.ndarray | None]:
+    """Detects a real soccer ball (white/black/patterned sphere) on the floor using motion and circularity."""
+    h, w = frame.shape[:2]
+    floor_y = int(h * 0.35)
+    floor_roi = frame[floor_y:, :]
+
+    fgmask = None
+    if fgbg is not None:
+        try:
+            fgmask = fgbg.apply(floor_roi)
+            k_el = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, k_el)
+        except Exception:
+            fgmask = None
+
+    candidates = []
+    # 1. Check moving contours in the floor region
+    if fgmask is not None:
+        cnts, _ = cv2.findContours(fgmask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for c in cnts:
+            area = cv2.contourArea(c)
+            if 300 < area < 10000:
+                peri = cv2.arcLength(c, True)
+                if peri > 0:
+                    circ = 4 * np.pi * area / (peri * peri)
+                    bx, by, bw, bh = cv2.boundingRect(c)
+                    roi = floor_roi[by:by+bh, bx:bx+bw]
+                    if roi.size > 0:
+                        rhsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+                        v_m = rhsv[:,:,2].mean()
+                        s_m = rhsv[:,:,1].mean()
+                        # Soccer ball: high brightness, low-to-moderate saturation
+                        if v_m > 85 and s_m < 110:
+                            score = circ * 40.0 + v_m * 0.3 - s_m * 0.2
+                            cx = (bx + bw / 2) / w
+                            cy = (by + bh / 2 + floor_y) / h
+                            candidates.append((score, {
+                                'x': round(cx, 4),
+                                'y': round(cy, 4),
+                                'box': [round(bx / w, 4), round((by + floor_y) / h, 4), round(bw / w, 4), round(bh / h, 4)],
+                                'circularity': round(float(circ), 2)
+                            }))
+
+    # 2. Fallback: Hough Circles on floor ROI if stationary or background subtractor warming up
+    if not candidates:
+        gray_floor = cv2.cvtColor(floor_roi, cv2.COLOR_BGR2GRAY)
+        circles = cv2.HoughCircles(gray_floor, cv2.HOUGH_GRADIENT, dp=1.2, minDist=30, param1=50, param2=26, minRadius=14, maxRadius=55)
+        if circles is not None:
+            for c in circles[0]:
+                cx, cy, r = int(c[0]), int(c[1] + floor_y), int(c[2])
+                if cy - r >= 0 and cy + r < h and cx - r >= 0 and cx + r < w:
+                    roi = frame[cy-r:cy+r, cx-r:cx+r]
+                    if roi.size > 0:
+                        rhsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+                        v_m = rhsv[:,:,2].mean()
+                        s_m = rhsv[:,:,1].mean()
+                        std_v = rhsv[:,:,2].std()
+                        if v_m > 90 and s_m < 95:
+                            score = (v_m - 90) * 0.5 + std_v * 1.5
+                            candidates.append((score, {
+                                'x': round(cx / w, 4),
+                                'y': round(cy / h, 4),
+                                'box': [round((cx - r) / w, 4), round((cy - r) / h, 4), round(2 * r / w, 4), round(2 * r / h, 4)],
+                                'circularity': 0.85
+                            }))
+
+    if candidates:
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1], fgmask
+    return None, None
+
+
 def classify_person_team(frame: np.ndarray, box: list[float], hsv_a: tuple[int, int, int], hsv_b: tuple[int, int, int]) -> str | None:
-    """Classifies a detected person box into Team A or Team B based on torso color."""
+    """Classifies a detected person box into Team A or Team B based on torso and clothing color."""
     h_f, w_f = frame.shape[:2]
     x, y, w, h = [int(box[0]*w_f), int(box[1]*h_f), int(box[2]*w_f), int(box[3]*h_f)]
     torso_y0 = max(0, min(h_f - 1, int(y + 0.12 * h)))
     torso_y1 = max(0, min(h_f, int(y + 0.55 * h)))
     torso_x0 = max(0, min(w_f - 1, int(x + 0.12 * w)))
     torso_x1 = max(0, min(w_f, int(x + 0.88 * w)))
-    if torso_y1 <= torso_y0 or torso_x1 <= torso_x0:
-        return None
-    torso = frame[torso_y0:torso_y1, torso_x0:torso_x1]
-    cnt_a = cv2.countNonZero(hsv_mask(torso, hsv_a, tolerance=16))
-    cnt_b = cv2.countNonZero(hsv_mask(torso, hsv_b, tolerance=16))
-    if cnt_a > cnt_b and cnt_a > 12:
-        return 'A'
-    elif cnt_b > cnt_a and cnt_b > 12:
-        return 'B'
+    if torso_y1 > torso_y0 and torso_x1 > torso_x0:
+        torso = frame[torso_y0:torso_y1, torso_x0:torso_x1]
+        cnt_a = cv2.countNonZero(hsv_mask(torso, hsv_a, tolerance=16))
+        cnt_b = cv2.countNonZero(hsv_mask(torso, hsv_b, tolerance=16))
+        if cnt_a > cnt_b and cnt_a > 12:
+            return 'A'
+        elif cnt_b > cnt_a and cnt_b > 12:
+            return 'B'
+
+    # Check full body (e.g. colored shorts/pants like plaid or track pants)
+    body_y1 = max(0, min(h_f, int(y + 0.95 * h)))
+    if body_y1 > torso_y0 and torso_x1 > torso_x0:
+        body = frame[torso_y0:body_y1, torso_x0:torso_x1]
+        cnt_a = cv2.countNonZero(hsv_mask(body, hsv_a, tolerance=16))
+        cnt_b = cv2.countNonZero(hsv_mask(body, hsv_b, tolerance=16))
+        if cnt_a > cnt_b and cnt_a > 15:
+            return 'A'
+        elif cnt_b > cnt_a and cnt_b > 15:
+            return 'B'
     return None
 
 
